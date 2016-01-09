@@ -8,20 +8,21 @@ namespace Hasty;
 
 class Debugger
 {
-    private $routeList;
-    private $render;
+    private static $queries = [];
+    private static $routeList;
+    private static $render;
 
-    public function setRouteList($routeList)
+    public static function setRouteList($routeList)
     {
-        $this->routeList = $routeList;
+        static::$routeList = $routeList;
     }
 
-    public function setRender($render)
+    public static function setRender($render)
     {
-        $this->render = $render;
+        static::$render = $render;
     }
 
-    private function _generateTable($data)
+    private static function _generateTable($data)
     {
         $t = '<table><thead><tr>';
         $header = array_shift($data);
@@ -40,42 +41,51 @@ class Debugger
         return $t;
     }
 
-    public function loadDebugger()
+    public static function loadDebugger()
     {
         # server
         $raw = [['key', 'value']];
         foreach ($_SERVER as $k => $v)
             $raw[] = [$k, $v];
-        $data['server'] = $this->_generateTable($raw);
+        $data['server'] = static::_generateTable($raw);
 
         # session
         $raw = [['key', 'value']];
         foreach ($_SESSION as $k => $v)
             $raw[] = [$k, '<pre>' . json_encode($v, JSON_PRETTY_PRINT) . '</pre>'];
-        $data['session'] = $this->_generateTable($raw);
+        $data['session'] = static::_generateTable($raw);
 
         # cookie
         $raw = [['key', 'value']];
         foreach ($_COOKIE as $k => $v)
             $raw[] = [$k, $v];
-        $data['cookie'] = $this->_generateTable($raw);
+        $data['cookie'] = static::_generateTable($raw);
 
         # template
         $raw = [['url', 'endpoint', 'methods']];
-        foreach ($this->routeList as $v)
+        foreach (static::$routeList as $v)
             $raw[] = [
                 $v['route']['path'],
                 $v['class'] . '::' . $v['method'],
                 implode(', ', $v['route']['methods'])
             ];
-        $data['route'] = $this->_generateTable($raw);
+        $data['route'] = static::_generateTable($raw);
 
         # template
         $raw = [['key', 'value']];
-        foreach ($this->render->getArgs() as $k => $v)
+        foreach (static::$render->getArgs() as $k => $v)
             $raw[] = [$k, '<pre>' . json_encode($v, JSON_PRETTY_PRINT) . '</pre>'];
-        $data['template'] = '<h3>' . $this->render->getTemplate() . '</h3>'
-            . $this->_generateTable($raw);
+        $data['template'] = '<h3>' . static::$render->getTemplate() . '</h3>'
+            . static::_generateTable($raw);
+
+        # queries
+        $raw = [['sql', 'params', 'types', 'ellapsed']];
+        # array_unshift(static::$queries, ['sql', 'params', 'types', 'ellapsed']);
+        foreach ((array) static::$queries as $v)
+            $raw[] = [$v[0], json_encode($v[1]),
+                json_encode($v[2]),
+                $v[3]];
+        $data['queries'] = static::_generateTable($raw);
 
         $panels = [];
         foreach ($data as $k => $v) {
@@ -99,6 +109,11 @@ class Debugger
             'autoescape' => true
         ));
         echo $twig->render('template.twig', $debugValue);
+    }
+
+    public static function addQuery($sql, $params, $types, $ellapsed)
+    {
+        static::$queries[] = [$sql, $params, $types, $ellapsed];
     }
 }
 

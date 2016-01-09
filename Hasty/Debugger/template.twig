@@ -8,6 +8,7 @@
         outline: 0;
         background: none;
     }
+
     #flDebug {
         font-family: sans-serif;
         color: #000;
@@ -57,8 +58,8 @@
         font-style: normal;
         text-decoration: none;
         display: block;
-        font-size: 16px;
-        padding: 10px 10px 5px 25px;
+        font-size: 13px;
+        padding: 7px 10px 7px 14px;
         color: #fff;
     }
 
@@ -550,6 +551,14 @@
 {% endfor %}
 <div id="flDebugWindow" class="panelContent"></div>
 </div>
+
+<script>
+    if (typeof jQuery === 'undefined') {
+        var sc = document.createElement('script');
+        sc.src = 'js/jquery-2.1.1.min.js';
+        document.write('<script src=\"/js/jquery-2.1.1.min.js\"><\/script>');
+    }
+</script>
 
 <script>
     (function ($) {
