@@ -5,15 +5,17 @@ namespace Hasty;
 use FastRoute\BadRouteException;
 use FastRoute\Dispatcher;
 use FastRoute\RouteCollector;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger as MonologLogger;
 
 class App
 {
 
     const MAX_SCAN_DEPTH = 10;
 
-    public static function run($appPath)
+    private static function route($appPath)
     {
-        $routeInfo = static::getRoutes($appPath);
+        $routeInfo = static::_getRoutes($appPath);
 
         switch ($routeInfo[0]) {
             case Dispatcher::NOT_FOUND:
@@ -108,7 +110,7 @@ class App
         }
     }
 
-    private static function getRoutes($appPath)
+    private static function _getRoutes($appPath)
     {
         $routes = [];
         # simple routine from FastRoute tutorial
@@ -145,4 +147,50 @@ class App
 
         return $ri;
     }
+
+    public static function run($appPath)
+    {
+        define('DS', DIRECTORY_SEPARATOR);
+        define('ROOT', dirname(realpath($appPath)));
+
+        # constants
+        define('BUFFER_SEP', "\x20");
+        define('NL', "\n");
+
+        # ini set
+        ini_set('display_errors', 1);
+        ini_set('html_errors', 0);
+        ini_set('error_log', 'syslog');
+        error_reporting(E_ALL);
+
+        mb_internal_encoding('UTF-8');
+        mb_http_output('UTF-8');
+        date_default_timezone_set('Asia/Seoul');
+        session_start();
+
+        # config
+        $configFile = getenv('CONFIG_FILE');
+        $configSection = getenv('CONFIG_SECTION');
+        if (!$configFile || !file_exists(ROOT . \DS . $configFile))
+            die('specify CONFIG_FILE');
+        $config = require_once(ROOT . \DS . $configFile);
+        Config::init($config[$configSection]);
+
+        # log
+        Logger::init(Config::get('name'),
+            new StreamHandler(ROOT . \DS . 'tmp' . \DS . 'app.log', MonologLogger::DEBUG));
+
+        echo static::route($appPath);
+
+        if (Config::get('debug'))
+            \Hasty\Debugger::loadDebugger();
+    }
 }
+
+function dump($obj)
+{
+    var_dump($obj);
+    if (php_sapi_name() != 'cli')
+        echo BUFFER_SEP;
+}
+
