@@ -157,6 +157,19 @@ class App
         define('BUFFER_SEP', "\x20");
         define('NL', "\n");
 
+        # config
+        $c = \explode(':', getenv('CONFIG'));
+        if (count($c) != 2)
+            die('specify CONFIG_FILE');
+        $configFile = $c[0];
+        $configSection = $c[1];
+        if (!$configFile || !file_exists(ROOT . \DS . $configFile))
+            die('invalid config File');
+        $config = require_once(ROOT . \DS . $configFile);
+        if (!isset($config[$configSection]))
+            die('invalid config section');
+        Config::init($config[$configSection]);
+
         # ini set
         ini_set('display_errors', 1);
         ini_set('html_errors', 0);
@@ -167,14 +180,6 @@ class App
         mb_http_output('UTF-8');
         date_default_timezone_set('Asia/Seoul');
         session_start();
-
-        # config
-        $configFile = getenv('CONFIG_FILE');
-        $configSection = getenv('CONFIG_SECTION');
-        if (!$configFile || !file_exists(ROOT . \DS . $configFile))
-            die('specify CONFIG_FILE');
-        $config = require_once(ROOT . \DS . $configFile);
-        Config::init($config[$configSection]);
 
         # log
         Logger::init(Config::get('name'),
