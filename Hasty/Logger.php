@@ -17,6 +17,6 @@ class Logger
 
     public static function __callStatic($name, $arguments)
     {
-        static::$logger->{$name}($arguments);
+        static::$logger->{$name}($arguments[0]);
     }
 }
