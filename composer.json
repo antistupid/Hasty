@@ -14,9 +14,7 @@
     "php": ">=5.4.0",
     "monolog/monolog": "1.*",
     "nikic/fast-route": "0.6.0",
-    "twig/twig": "1.*",
-    "doctrine/orm": "2.5.4",
-    "doctrine/migrations": "^1.2"
+    "twig/twig": "1.*"
   },
   "autoload": {
     "psr-4": {
