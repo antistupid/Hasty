@@ -2,23 +2,9 @@
 
 namespace Hasty;
 
+use Hasty\VO\Jsonified;
 use Hasty\VO\Redirect;
 use Hasty\VO\Render;
-
-class JsonifiedObject
-{
-    public $value;
-
-    public function __construct($value)
-    {
-        $this->value = json_encode($value, JSON_PRETTY_PRINT);
-    }
-
-    public function getValue()
-    {
-        return $this->value;
-    }
-}
 
 class Controller
 {
@@ -33,9 +19,9 @@ class Controller
         return new Render($template, $args);
     }
 
-    final protected function jsonify($array)
+    final protected function jsonify($array, $httpResponseCode = 200)
     {
-        return new JsonifiedObject($array);
+        return new Jsonified($array, $httpResponseCode);
     }
 
     final protected function redirect($url, $flash = '')

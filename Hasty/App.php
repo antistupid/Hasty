@@ -112,9 +112,11 @@ namespace Hasty {
                 case is_scalar($return):
                     \dump($return);
                     return $return;
-                case is_a($return, '\Hasty\JsonifiedObject'):
-                    /** @var $return \JsonifiedObject */
+                case is_a($return, '\Hasty\VO\Jsonified'):
+                    /** @var $return \Hasty\VO\Jsonified */
                     header('Content-Type: application/json');
+                    if ($return->getStatus() !== 200)
+                    header($_SERVER["SERVER_PROTOCOL"] . " " . $return->getStatus());
                     return $return->getValue();
                 case is_a($return, '\Hasty\VO\Redirect'):
                     if ($return->getFlash())
