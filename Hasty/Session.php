@@ -4,7 +4,8 @@ namespace Hasty;
 
 class Session
 {
-    public static function get($key) {
+    public static function get($key)
+    {
         if (empty($_SESSION[$key]))
             return null;
         return $_SESSION[$key];
@@ -22,8 +23,11 @@ class Session
         unset($_SESSION[$key]);
     }
 
-    public static function set($key, $value)
+    public static function set($key, $value = '')
     {
-        $_SESSION[$key] = $value;
+        if (!is_array($key))
+            return $_SESSION[$key] = $value;
+        foreach ($key as $k => $v)
+            $_SESSION[$k] = $v;
     }
 }
