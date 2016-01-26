@@ -2,16 +2,19 @@
 
 namespace {
 
+    use Hasty\Logger;
+
     function dump($obj)
     {
-        var_dump($obj);
+        print_r($obj);
         if (php_sapi_name() != 'cli')
-            echo BUFFER_SEP;
+            echo \BUFFER_SEP;
     }
 
     class UnregisterableCallback
     {
 
+        /** @var UnregisterableCallback */
         public static $handler;
 
         public static function setHandler($callback)
@@ -54,10 +57,10 @@ namespace {
         $content = ob_get_contents();
         ob_clean();
         if ($content) {
-            foreach (explode("\n",
+            foreach (explode(\BUFFER_SEP,
                 trim($content, \BUFFER_SEP)) as $v) {
                 if (trim($v))
-                    \Hasty\Logger::info($v);
+                    Logger::info($v);
             }
         }
         header($_SERVER["SERVER_PROTOCOL"] . " 500");
@@ -69,6 +72,8 @@ namespace Hasty {
     use FastRoute\BadRouteException;
     use FastRoute\Dispatcher;
     use FastRoute\RouteCollector;
+    use Hasty\DB\Logger as DBLogger;
+    use Hasty\DB\Query;
     use Monolog\Handler\StreamHandler;
     use Monolog\Logger as MonologLogger;
 
@@ -104,21 +109,22 @@ namespace Hasty {
             if ($content)
                 foreach (explode(\BUFFER_SEP, preg_replace("/\\s{2,}|\\n/", ' ',
                     trim($content, \BUFFER_SEP))) as $v)
-                    \Hasty\Logger::info($v);
+                    Logger::info($v);
 
             \UnregisterableCallback::$handler->unregister();
 
             switch (true) {
                 case is_scalar($return):
-                    \dump($return);
                     return $return;
-                case is_a($return, '\Hasty\VO\Jsonified'):
+                case is_a($return, '\\Hasty\\VO\\StaticContent'):
+                    exit;
+                case is_a($return, '\\Hasty\\VO\\Jsonified'):
                     /** @var $return \Hasty\VO\Jsonified */
                     header('Content-Type: application/json');
                     if ($return->getStatus() !== 200)
-                    header($_SERVER["SERVER_PROTOCOL"] . " " . $return->getStatus());
+                        header($_SERVER["SERVER_PROTOCOL"] . " " . $return->getStatus());
                     return $return->getValue();
-                case is_a($return, '\Hasty\VO\Redirect'):
+                case is_a($return, '\\Hasty\\VO\\Redirect'):
                     if ($return->getFlash())
                         Session::set('flash', $return->getFlash());
                     header('Location: ' . $return->getUrl());
@@ -127,7 +133,7 @@ namespace Hasty {
                     break;
             }
 
-            $loader = new \Twig_Loader_FileSystem($appPath . \DS . 'View');
+            $loader = new \Twig_Loader_Filesystem($appPath . \DS . 'View');
             $twig = new \Twig_Environment($loader, array(
                 'cache' => '/tmp/compilation_cache',
                 'charset' => 'utf-8',
@@ -227,7 +233,8 @@ namespace Hasty {
             define('NL', "\n");
 
             # config
-            $c = \explode(':', getenv('CONFIG'));
+            // $c = \explode(':', getenv('CONFIG'));
+            $c = \explode(':', 'config.php:development');
             if (count($c) != 2)
                 die('specify CONFIG_FILE');
             $configFile = $c[0];
@@ -254,6 +261,10 @@ namespace Hasty {
             Logger::init(Config::get('name'),
                 new StreamHandler(ROOT . \DS . 'tmp' . \DS . 'app.log', MonologLogger::DEBUG));
 
+            # DB logger
+            if (Config::get('debug'))
+                Query::$logger = new DBLogger();
+
             echo static::route($appPath);
 
             if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
@@ -261,7 +272,7 @@ namespace Hasty {
             }
 
             if (Config::get('debug'))
-                \Hasty\Debugger::loadDebugger();
+                Debugger::loadDebugger();
         }
     }
 }
