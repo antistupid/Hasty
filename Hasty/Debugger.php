@@ -73,10 +73,12 @@ class Debugger
 
         # template
         $raw = [['key', 'value']];
-        foreach (static::$render->getArgs() as $k => $v)
-            $raw[] = [$k, '<pre>' . json_encode($v, JSON_PRETTY_PRINT) . '</pre>'];
-        $data['template'] = '<h3>' . static::$render->getTemplate() . '</h3>'
-            . static::_generateTable($raw);
+        if (static::$render) {
+            foreach (static::$render->getArgs() as $k => $v)
+                $raw[] = [$k, '<pre>' . json_encode($v, JSON_PRETTY_PRINT) . '</pre>'];
+            $data['template'] = '<h3>' . static::$render->getTemplate() . '</h3>'
+                . static::_generateTable($raw);
+        }
 
         # queries
         $raw = [['sql', 'params', 'types', 'ellapsed']];
