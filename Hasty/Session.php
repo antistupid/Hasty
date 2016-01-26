@@ -18,6 +18,11 @@ class Session
 
     public static function del($key)
     {
+        if (is_array($key)) {
+            foreach ($key as $v)
+                unset($_SESSION[$v]);
+            return;
+        }
         if (empty($_SESSION[$key]))
             return null;
         unset($_SESSION[$key]);
