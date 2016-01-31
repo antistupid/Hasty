@@ -228,11 +228,11 @@ namespace Hasty {
             define('DS', DIRECTORY_SEPARATOR);
             define('ROOT', dirname(realpath($appPath)));
 
-            # constants
+            /* constants */
             define('BUFFER_SEP', "\xAA");
             define('NL', "\n");
 
-            # config
+            /* config */
             // $c = \explode(':', getenv('CONFIG'));
             $c = \explode(':', 'config.php:development');
             if (count($c) != 2)
@@ -246,7 +246,7 @@ namespace Hasty {
                 die('invalid config section');
             Config::init($config[$configSection]);
 
-            # ini set
+            /* ini set */
             ini_set('display_errors', 1);
             ini_set('html_errors', 0);
             ini_set('error_log', 'syslog');
@@ -257,11 +257,14 @@ namespace Hasty {
             date_default_timezone_set('Asia/Seoul');
             session_start();
 
-            # log
+            /* install static classes */
+            Get::install();
+
+            /* log */
             Logger::init(Config::get('name'),
                 new StreamHandler(ROOT . \DS . 'tmp' . \DS . 'app.log', MonologLogger::DEBUG));
 
-            # DB logger
+            /* DB logger */
             if (Config::get('debug'))
                 Query::$logger = new DBLogger();
 
