@@ -44,5 +44,21 @@ class Field
         return $this->name;
     }
 
+    /**
+     * field ASC for an order clause
+     */
+    public function asc()
+    {
+        return $this->name . ' ASC';
+    }
+
+    /**
+     * field DESC for an order clause
+     */
+    public function desc()
+    {
+        return $this->name . ' DESC';
+    }
+
 }
 

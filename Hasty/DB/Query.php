@@ -6,53 +6,24 @@ class DBException extends \Exception
 {
 }
 
-class Query
+class Operator
 {
+    private $op;
 
-    /** @var \Hasty\DB\Logger */
-    public static $logger = null;
-
-    public static function get($entities)
+    public function __construct($op)
     {
-        return new Query($entities);
+        $this->op = $op;
     }
 
-    private static $connectionString;
-    private static $config;
-
-    public static function config($config)
+    public function getOp()
     {
-        static::$connectionString = "dbname=$config[dbname] host=$config[host] user=$config[user] password=$config[pass]";
-        static::$config = $config;
+        return $this->op;
     }
 
-    private $entities;
-    private $conn;
+}
 
-    public function __construct($entities)
-    {
-        $this->conn = \pg_connect(static::$connectionString);
-        if (!$this->conn)
-            throw new \Exception('can not connect');
-        $this->entities = $entities;
-    }
-
-    private $_query = [];
-
-    public static function query($string, $parameters = [])
-    {
-        $config = static::$config;
-        $pdo = new \PDO("pgsql:host=$config[host];dbname=$config[dbname]", $config['user'], $config['pass']);
-        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        try {
-            $stmt = $pdo->prepare($string);
-            $stmt->setFetchMode(\PDO::FETCH_ASSOC);
-            $stmt->execute($parameters);
-        } catch (\PDOException $e) {
-            throw new DBException($e->getMessage());
-        }
-        return $stmt->fetchAll();
-    }
+class QueryOperator
+{
 
     public static function eq($a, $b)
     {
@@ -108,8 +79,50 @@ class Query
     {
         return [$a, new Operator('isnull'), null];
     }
+}
 
-    private function makePhrase($conditions)
+class Query extends QueryOperator
+{
+
+    /** @var \Hasty\DB\Logger */
+    public static $logger = null;
+
+    /** @var string */
+    private static $connectionString;
+
+    /** @var array */
+    private static $config;
+
+    public static function get($entities)
+    {
+        return new Query($entities);
+    }
+
+    public static function config($config)
+    {
+        static::$connectionString =
+            "dbname=$config[dbname] host=$config[host] " .
+            "user=$config[user] password=$config[pass]";
+        static::$config = $config;
+    }
+
+    private $entities = [];
+    private $conn;
+    private $_where = [];
+    private $_order = [];
+    private $parameters = [];
+    private $limit = null;
+    private $offset = null;
+
+    public function __construct($entities)
+    {
+        $this->conn = \pg_connect(static::$connectionString);
+        if (!$this->conn)
+            throw new \Exception('can not connect');
+        $this->entities = $entities;
+    }
+
+    private function _makeConditionPhrase($conditions)
     {
         $phrases = [];
         foreach ($conditions as $v) {
@@ -131,7 +144,6 @@ class Query
                 continue;
             }
             if ($operator->getOp() == '= ANY') {
-                // TODO field명만 됨
                 if (!is_scalar($left))
                     $left = $left->getName();
                 if (!is_scalar($right))
@@ -142,7 +154,7 @@ class Query
             if ($operator->getOp() == 'IN') {
                 // TODO literal array만 됨
                 $t = [];
-                foreach ($v[2] as $elem) {
+                foreach ($right as $elem) {
                     $t[] = '$' . ($this->bindSequence++);
                     $this->parameters[] = $elem;
                 }
@@ -170,79 +182,38 @@ class Query
 
     public function select($fields = [])
     {
-        $this->_query = [];
-        $this->_query[] = "SELECT";
-
-        if (count($fields) !== 0) {
-            $_fields = [];
-            foreach ($fields as $v)
-                $_fields[] = $v->getName();
-        } else {
-            $_fields = [];
-            foreach ($this->entities as $k => $v) {
-                if (is_array($v))
-                    $v = $v[0];
-                $_fields = array_merge($_fields, $v->getFields());
-            }
-        }
-        $this->_query[] = implode(', ', $_fields);
-        $this->_query[] = "FROM";
-        $this->_query[] = $this->entities[0]->getTablenameWithAs();
-
-        if (count($this->entities) > 1) {
-            for ($i = 1, $count = count($this->entities); $i < $count; $i++) {
-                $v = $this->entities[$i];
-                if (is_array($v)) {
-                    /**
-                     * v[0] table
-                     * v[1] conditions
-                     * v[2] joinMethod <optional>
-                     */
-                    if (isset($v[2]))
-                        $this->_query[] = $v[2];
-                    else
-                        $this->_query[] = 'INNER JOIN';
-                    $this->_query[] = $v[0]->getTablenameWithAs();
-
-                    $this->_query[] = 'ON';
-                    $this->_query[] = implode(' AND ', $this->makePhrase($v[1]));
-                } else {
-                    $this->_query[] = 'NATURAL JOIN';
-                    $this->_query[] = $v;
-                }
-            }
-        }
+        $this->_fields = $fields;
 
         return $this;
     }
 
-    private $_where = [];
-    private $_order = [];
-    private $bindSequence = 1;
-    private $parameters = [];
-
     public function where($conditions)
     {
-        $this->_where = $this->makePhrase($conditions);
+        $this->_where = $conditions;
         return $this;
     }
 
     public function order_by($order)
     {
         foreach ($order as $k => $o)
-            if (!is_scalar($o))
-                $order[$k] = $o->getName();
+            if (!is_scalar($o)) {
+                assert(is_a($o, "Field"));
+                $order[$k] = $o->asc();
+            }
         $this->_order = $order;
         return $this;
     }
-
-    private $limit = null;
-    private $offset = null;
 
     public function limit($limit, $offset = null)
     {
         $this->limit = $limit;
         $this->offset = $offset;
+        return $this;
+    }
+
+    public function join($entities)
+    {
+        $this->entities[] = $entities;
         return $this;
     }
 
@@ -310,11 +281,72 @@ class Query
             $callback($result);
     }
 
+    public function total()
+    {
+        $resource = $this->_executeQuery();
+        return \pg_num_rows($resource);
+    }
+
+    private function _makeQuery()
+    {
+
+        $query = [];
+        $query[] = "SELECT";
+
+        if (count($this->_fields) !== 0) {
+            $_fields = [];
+            foreach ($this->_fields as $v)
+                $_fields[] = $v->getNameWithAlias();
+        } else {
+            $_fields = [];
+            foreach ($this->entities as $k => $v) {
+                if (is_array($v))
+                    $v = $v[0];
+                $_fields = array_merge($_fields, $v->getFields());
+            }
+        }
+        $query[] = implode(', ', $_fields);
+        $query[] = "FROM";
+        $query[] = $this->entities[0]->getTablenameWithAs();
+
+        if (count($this->entities) > 1) {
+            for ($i = 1, $count = count($this->entities); $i < $count; $i++) {
+                $v = $this->entities[$i];
+                if (is_array($v)) {
+                    /**
+                     * v[0] table
+                     * v[1] conditions
+                     * v[2] joinMethod <optional>
+                     */
+                    if (isset($v[2]))
+                        $query[] = $v[2];
+                    else
+                        $query[] = 'INNER JOIN';
+                    $query[] = $v[0]->getTablenameWithAs();
+
+                    $query[] = 'ON';
+                    $query[] = implode(' AND ', $this->_makeConditionPhrase($v[1]));
+                } else {
+                    $query[] = 'NATURAL JOIN';
+                    $query[] = $v;
+                }
+            }
+        }
+        return $query;
+    }
+
+    private $bindSequence = 1;
+
     private function _executeQuery()
     {
-        $rawQuery = implode(' ', $this->_query);
-        if ($this->_where)
-            $rawQuery .= ' WHERE ' . implode(' AND ', $this->_where);
+        $this->bindSequence = 1;
+        $this->parameters = [];
+        $query = $this->_makeQuery();
+        $where = $this->_makeConditionPhrase($this->_where);
+
+        $rawQuery = implode(' ', $query);
+        if ($where)
+            $rawQuery .= ' WHERE ' . implode(' AND ', $where);
         if ($this->_order)
             $rawQuery .= ' ORDER BY ' . implode(', ', $this->_order);
         if ($this->limit)
@@ -334,24 +366,23 @@ class Query
         return $resource;
     }
 
+    public static function query($string, $parameters = [])
+    {
+        $config = static::$config;
+        $pdo = new \PDO("pgsql:host=$config[host];dbname=$config[dbname]", $config['user'], $config['pass']);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        try {
+            $stmt = $pdo->prepare($string);
+            $stmt->setFetchMode(\PDO::FETCH_ASSOC);
+            $stmt->execute($parameters);
+        } catch (\PDOException $e) {
+            throw new DBException($e->getMessage());
+        }
+        return $stmt->fetchAll();
+    }
+
     public function __toString()
     {
-        return implode(' ', $this->_query);
+        return implode(' ', $this->_makeQuery());
     }
-}
-
-class Operator
-{
-    private $op;
-
-    public function __construct($op)
-    {
-        $this->op = $op;
-    }
-
-    public function getOp()
-    {
-        return $this->op;
-    }
-
 }
